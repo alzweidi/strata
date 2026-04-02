@@ -20,6 +20,13 @@ export interface LogOptions {
   since?: string;
   maxCount?: number;
   filePath?: string;
+  allRefs?: boolean;
+}
+
+export interface FileChangeStat {
+  filePath: string;
+  insertions: number;
+  deletions: number;
 }
 
 export interface Commit {
@@ -34,6 +41,7 @@ export interface Commit {
   filesChanged: string[];
   insertions: number;
   deletions: number;
+  fileStats?: FileChangeStat[];
   isMerge: boolean;
 }
 
@@ -306,6 +314,7 @@ export interface StrataConfig {
   cache: boolean;
   port: number;
   since?: string;
+  allRefs: boolean;
   ignore: string[];
   concurrency: number;
   minCoupling: number;
@@ -345,4 +354,3 @@ export interface FileMetricLookup {
   age: Map<string, AgeMetric>;
   loc: Map<string, LocMetric>;
 }
-

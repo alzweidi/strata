@@ -75,11 +75,11 @@ export async function assertGitRepository(repoPath: string): Promise<void> {
  */
 export async function collectRepositorySnapshot(
   repoPath: string,
-  config: Pick<StrataConfig, "since" | "ignore" | "concurrency">,
+  config: Pick<StrataConfig, "since" | "allRefs" | "ignore" | "concurrency">,
 ): Promise<RepositorySnapshot> {
   const head = await readRepositoryHead(repoPath);
   const trackedFiles = await listTrackedFiles(head.repoPath, config.ignore);
-  const commits = await readCommitHistory(head.repoPath, config.since);
+  const commits = await readCommitHistory(head.repoPath, config.since, config.allRefs);
   return {
     ...head,
     trackedFiles,
@@ -121,8 +121,9 @@ export async function readRepositoryHead(repoPath: string): Promise<RepositoryHe
 export async function readCommitHistory(
   repoPath: string,
   since?: string,
+  allRefs: boolean = false,
 ): Promise<Commit[]> {
-  return readCommitHistoryInternal(repoPath, since);
+  return readCommitHistoryInternal(repoPath, since, allRefs);
 }
 
 /**

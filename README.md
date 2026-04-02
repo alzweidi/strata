@@ -1,6 +1,6 @@
 # Strata
 
-Strata is a fully local repository intelligence platform. Point it at any Git repository and it builds a report with hotspot, bus factor, age, coupling, LOC, author, commit, and explorer views, then serves a local dashboard.
+Strata is a repository intelligence platform. Point it at a local Git repository or a GitHub repository URL and it builds a report with hotspot, bus factor, age, coupling, LOC, author, commit, and explorer views, then serves a local dashboard.
 
 ## Workspace
 
@@ -36,6 +36,18 @@ npm run build
 npm run strata -- analyse /path/to/any/git/repo
 ```
 
+You can also analyse a public GitHub repository directly:
+
+```bash
+npm run strata -- analyse https://github.com/owner/repo.git
+```
+
+For a private GitHub repository, use an HTTPS URL and provide a token through the environment:
+
+```bash
+GITHUB_TOKEN=github_pat_xxx npm run strata -- analyse https://github.com/owner/private-repo.git
+```
+
 That command:
 
 1. Mines Git history and blame data.
@@ -49,6 +61,12 @@ That command:
 ```bash
 # Main workflow
 npm run strata -- analyse ./some-repo
+
+# Analyse a GitHub repo without cloning it manually first
+npm run strata -- analyse https://github.com/owner/repo.git --all-refs
+
+# Analyse a private GitHub repo
+GITHUB_TOKEN=github_pat_xxx npm run strata -- analyse https://github.com/owner/private-repo.git --all-refs
 
 # Serve an existing report
 npm run strata -- serve ./some-repo/.strata
@@ -73,6 +91,7 @@ strata analyse <repo-path> [options]
   --no-cache            Force full re-analysis
   --port <n>            Dashboard server port (default: 4321)
   --since <date>        Only analyse commits after this date
+  --all-refs            Analyse history across all local and remote refs
   --ignore <glob>       Glob patterns to exclude (repeatable)
   --concurrency <n>     Parallel git operations (default: 4)
   --min-coupling <n>    Min co-changes to show in coupling (default: 3)
@@ -88,12 +107,18 @@ Strata reads an optional `.stratarc.json` from the analysed repository root.
 {
   "ignore": ["dist/**", "node_modules/**", "*.min.js"],
   "since": "2024-01-01",
+  "allRefs": true,
   "minCoupling": 5,
   "concurrency": 8
 }
 ```
 
 CLI flags override config-file values.
+
+## Notes
+
+- `--all-refs` usually produces more complete history-based metrics for repositories that do active work on multiple branches.
+- Lockfiles and generated assets can dominate hotspots in some repositories. Use repeated `--ignore` flags or `.stratarc.json` to exclude them.
 
 ## Development
 
@@ -109,4 +134,3 @@ npm run test
 ```
 
 The UI falls back to `fixtures/report.json` during local development when `/report.json` is not available.
-

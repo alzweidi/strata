@@ -16,6 +16,7 @@ export interface GitLogQuery {
   filePath?: string;
   revRange?: string;
   follow?: boolean;
+  allRefs?: boolean;
 }
 
 export interface GitCommitFileStat {
@@ -250,6 +251,10 @@ export async function loadCommitSnapshots(
     commandQuery.follow = query.follow;
   }
 
+  if (query.allRefs !== undefined) {
+    commandQuery.allRefs = query.allRefs;
+  }
+
   if (normalizedFilePath !== undefined) {
     commandQuery.filePath = normalizedFilePath;
   }
@@ -260,6 +265,7 @@ export async function loadCommitSnapshots(
     query.maxCount ?? null,
     normalizedFilePath ?? "",
     query.follow ?? Boolean(query.filePath),
+    query.allRefs ?? false,
   ] as const;
   const cacheKey = createCacheKey(
     context.repoRoot,
@@ -387,6 +393,10 @@ function buildLogArgs(
 
   if (query.maxCount !== undefined) {
     args.push(`--max-count=${query.maxCount}`);
+  }
+
+  if (query.allRefs) {
+    args.push("--all");
   }
 
   if (query.revRange) {

@@ -8,6 +8,7 @@ export const DEFAULT_CONFIG: StrataConfig = {
   browser: true,
   cache: true,
   port: 4321,
+  allRefs: false,
   ignore: ["dist/**", "node_modules/**"],
   concurrency: 4,
   minCoupling: 3,
@@ -75,4 +76,3 @@ async function readConfigFile(
 function isMissingFile(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
-

@@ -48,6 +48,7 @@ export async function analyseRepository(
   const startedAt = performance.now();
   const cacheKey = createCacheKey(head.repoPath, head.headSha, "report", [
     config.since ?? "",
+    config.allRefs,
     config.ignore,
     config.concurrency,
     config.minCoupling,

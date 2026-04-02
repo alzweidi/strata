@@ -94,6 +94,7 @@ export async function readFileTexts(
 export async function readCommitHistory(
   repoPath: string,
   since?: string,
+  allRefs: boolean = false,
 ): Promise<Commit[]> {
   const args = [
     "log",
@@ -102,6 +103,10 @@ export async function readCommitHistory(
     "--numstat",
     "--no-renames",
   ];
+
+  if (allRefs) {
+    args.push("--all");
+  }
 
   if (since) {
     args.push(`--since=${since}`);
@@ -164,7 +169,14 @@ export function buildAuthorLastActive(commits: readonly Commit[]): Map<string, n
 export function buildTouchStats(commits: readonly Commit[]): Map<string, FileTouchStats> {
   const stats = new Map<string, FileTouchStats>();
   for (const commit of commits) {
-    for (const filePath of commit.filesChanged) {
+    const fileStats = commit.fileStats ?? commit.filesChanged.map((filePath) => ({
+      filePath,
+      insertions: 0,
+      deletions: 0,
+    }));
+
+    for (const fileStat of fileStats) {
+      const filePath = fileStat.filePath;
       const existing = stats.get(filePath) ?? {
         totalCommits: 0,
         totalInsertions: 0,
@@ -176,8 +188,8 @@ export function buildTouchStats(commits: readonly Commit[]): Map<string, FileTou
       };
 
       existing.totalCommits += 1;
-      existing.totalInsertions += commit.insertions;
-      existing.totalDeletions += commit.deletions;
+      existing.totalInsertions += fileStat.insertions;
+      existing.totalDeletions += fileStat.deletions;
       existing.firstSeen = Math.min(existing.firstSeen, commit.timestamp);
       existing.lastChanged = Math.max(existing.lastChanged, commit.timestamp);
       existing.authorCounts.set(
@@ -197,13 +209,17 @@ function readTextFile(filePath: string): Promise<string> {
 }
 
 function parseCommitLog(output: string): Commit[] {
-  const blocks = output.split("\x1e").map((block) => block.trim()).filter(Boolean);
   const commits: Commit[] = [];
 
-  for (const block of blocks) {
-    const lines = block.split("\n");
-    const header = lines[0];
-    if (!header) {
+  const headers = Array.from(output.matchAll(/([^\x1e]+)\x1e/g));
+  for (let index = 0; index < headers.length; index += 1) {
+    const current = headers[index];
+    if (!current || current.index === undefined) {
+      continue;
+    }
+
+    const header = current[1];
+    if (header === undefined) {
       continue;
     }
 
@@ -212,8 +228,12 @@ function parseCommitLog(output: string): Commit[] {
       continue;
     }
 
+    const statsStart = current.index + current[0].length;
+    const nextHeader = headers[index + 1];
+    const statsEnd = nextHeader?.index ?? output.length;
+    const statsChunk = output.slice(statsStart, statsEnd);
     const filesChanged = new Map<string, { insertions: number; deletions: number }>();
-    for (const line of lines.slice(1)) {
+    for (const line of statsChunk.split(/\r?\n/)) {
       const trimmed = line.trim();
       if (!trimmed) {
         continue;
@@ -261,6 +281,11 @@ function parseCommitLog(output: string): Commit[] {
         (sum, entry) => sum + entry.deletions,
         0,
       ),
+      fileStats: Array.from(filesChanged.entries()).map(([filePath, value]) => ({
+        filePath,
+        insertions: value.insertions,
+        deletions: value.deletions,
+      })),
       isMerge: /^merge\b/i.test(subject),
     });
   }

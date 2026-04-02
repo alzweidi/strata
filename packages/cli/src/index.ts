@@ -77,6 +77,18 @@ function reportCliError(error: unknown): void {
 
 function buildSuggestion(message: string): string | undefined {
   const normalized = message.toLowerCase();
+  if (normalized.includes("repository path does not exist")) {
+    return "Replace the example path with the real absolute path to your repository, for example `/Users/atta/code/anthedon-farm-os`.";
+  }
+
+  if (normalized.includes("git executable was not found on path") || normalized.includes("spawn git enoent")) {
+    return "Run `git --version` in this shell. If that fails, install Git or start a shell where Git is on PATH.";
+  }
+
+  if (normalized.includes("unable to clone") && normalized.includes("private github repository")) {
+    return "Set `GITHUB_TOKEN=...` (or `STRATA_GITHUB_TOKEN=...`) and pass an `https://github.com/owner/repo.git` URL.";
+  }
+
   if (normalized.includes("not a git repository")) {
     return "Run the command from inside a git repository or pass a repository path.";
   }
@@ -95,4 +107,3 @@ function buildSuggestion(message: string): string | undefined {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   void main();
 }
-

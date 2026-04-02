@@ -6,6 +6,7 @@ export interface AnalyseCommandOptions {
   cache: boolean;
   port: number;
   since?: string;
+  allRefs: boolean;
   ignore: string[];
   concurrency: number;
   minCoupling: number;
@@ -33,4 +34,3 @@ export interface ReportBundle {
   report: StrataReport;
   reportPath: string;
 }
-

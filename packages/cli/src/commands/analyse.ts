@@ -1,3 +1,4 @@
+import { access } from "node:fs/promises";
 import path from "node:path";
 
 import { Command } from "commander";
@@ -9,6 +10,7 @@ import { analyseRepository } from "../report.js";
 import { createProgressReporter } from "../progress.js";
 import { printSummaryTable } from "../output.js";
 import { startReportServer } from "../server.js";
+import { resolveAnalyseSource } from "../source.js";
 import type { AnalyseCommandOptions } from "../types.js";
 
 import open from "open";
@@ -31,6 +33,7 @@ export function registerAnalyseCommand(program: Command): Command {
     .option("--no-cache", "Force full re-analysis")
     .option("--port <n>", "Dashboard server port", parseIntOption, 4321)
     .option("--since <date>", "Only analyse commits after this date")
+    .option("--all-refs", "Analyse history across all local and remote refs")
     .option("--ignore <glob>", "Glob patterns to exclude", collect, [] as string[])
     .option("--concurrency <n>", "Parallel git operations", parseIntOption, 4)
     .option("--min-coupling <n>", "Min co-changes to show in coupling", parseIntOption, 3)
@@ -47,64 +50,99 @@ async function runAnalyse(
   command: Command,
 ): Promise<void> {
   const progress = createProgressReporter();
-  const configOverrides = buildConfigOverrides(options, command);
+  let configOverrides = buildConfigOverrides(options, command);
   configOverrides.ci = isCiEnvironment();
+  let currentPhase: string | undefined;
+  let source: Awaited<ReturnType<typeof resolveAnalyseSource>> | undefined;
 
-  progress.startPhase("Extracting history...");
-  const bundle = await analyseRepository(repoPath, configOverrides);
-  progress.succeedPhase("Extracting history...");
+  try {
+    currentPhase = "Preparing repository...";
+    progress.startPhase(currentPhase);
+    source = await resolveAnalyseSource(repoPath);
+    if (command.getOptionValueSource("out") !== "cli" && source.defaultOutDir) {
+      configOverrides = {
+        ...configOverrides,
+        outDir: source.defaultOutDir,
+      };
+    }
+    if (!source.isRemote) {
+      await assertRepositoryPath(source.repoPath);
+    }
+    progress.succeedPhase(currentPhase);
 
-  progress.startPhase("Analysing hotspots...");
-  progress.succeedPhase("Analysing hotspots...");
+    currentPhase = "Extracting history...";
+    progress.startPhase(currentPhase);
+    const bundle = await analyseRepository(source.repoPath, configOverrides);
+    progress.succeedPhase(currentPhase);
 
-  if (bundle.config.format === "json") {
-    progress.startPhase("Rendering...");
-    process.stdout.write(`${JSON.stringify(bundle.report, null, 2)}\n`);
-    progress.succeedPhase("Rendering...");
-    return;
+    currentPhase = "Analysing hotspots...";
+    progress.startPhase(currentPhase);
+    progress.succeedPhase(currentPhase);
+
+    if (bundle.config.format === "json") {
+      currentPhase = "Rendering...";
+      progress.startPhase(currentPhase);
+      process.stdout.write(`${JSON.stringify(bundle.report, null, 2)}\n`);
+      progress.succeedPhase(currentPhase);
+      return;
+    }
+
+    if (bundle.config.format === "csv") {
+      currentPhase = "Rendering...";
+      progress.startPhase(currentPhase);
+      const csvPaths = await exportCsvOnly(bundle.reportDir);
+      process.stdout.write(`${csvPaths.join("\n")}\n`);
+      progress.succeedPhase(currentPhase);
+      return;
+    }
+
+    currentPhase = "Rendering...";
+    progress.startPhase(currentPhase);
+    const server = await startReportServer(bundle.reportDir, bundle.config.port);
+    const url = server.url;
+
+    if (bundle.config.browser && !configOverrides.ci) {
+      await open(url);
+    }
+
+    printSummaryTable(bundle.report, url);
+    progress.succeedPhase(currentPhase);
+
+    if (bundle.config.watch) {
+      await watchForChanges(
+        source.repoPath,
+        server.url,
+        configOverrides,
+        bundle.report.meta.headSha,
+        async () => {
+          await server.close();
+        },
+      );
+      return;
+    }
+
+    if (configOverrides.ci) {
+      await server.close();
+      return;
+    }
+
+    process.stdout.write(`${pc.dim("Dashboard server running. Press Ctrl+C to stop.")}\n`);
+    await waitForShutdown(async () => {
+      await server.close();
+    });
+  } catch (error) {
+    if (currentPhase) {
+      progress.failPhase(currentPhase, describeAnalyseError(error));
+    } else {
+      progress.stop();
+    }
+
+    throw normalizeAnalyseError(error);
+  } finally {
+    if (source) {
+      await source.cleanup();
+    }
   }
-
-  if (bundle.config.format === "csv") {
-    progress.startPhase("Rendering...");
-    const csvPaths = await exportCsvOnly(bundle.reportDir);
-    process.stdout.write(`${csvPaths.join("\n")}\n`);
-    progress.succeedPhase("Rendering...");
-    return;
-  }
-
-  progress.startPhase("Rendering...");
-  const server = await startReportServer(bundle.reportDir, bundle.config.port);
-  const url = server.url;
-
-  if (bundle.config.browser && !configOverrides.ci) {
-    await open(url);
-  }
-
-  printSummaryTable(bundle.report, url);
-  progress.succeedPhase("Rendering...");
-
-  if (bundle.config.watch) {
-    await watchForChanges(
-      repoPath,
-      server.url,
-      configOverrides,
-      bundle.report.meta.headSha,
-      async () => {
-        await server.close();
-      },
-    );
-    return;
-  }
-
-  if (configOverrides.ci) {
-    await server.close();
-    return;
-  }
-
-  process.stdout.write(`${pc.dim("Dashboard server running. Press Ctrl+C to stop.")}\n`);
-  await waitForShutdown(async () => {
-    await server.close();
-  });
 }
 
 async function watchForChanges(
@@ -188,6 +226,10 @@ function buildConfigOverrides(
     overrides.since = options.since;
   }
 
+  if (command.getOptionValueSource("allRefs") === "cli") {
+    overrides.allRefs = options.allRefs;
+  }
+
   if (command.getOptionValueSource("ignore") === "cli") {
     overrides.ignore = options.ignore;
   }
@@ -222,4 +264,44 @@ function parseIntOption(value: string): number {
 
 function isCiEnvironment(): boolean {
   return Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
+}
+
+async function assertRepositoryPath(repoPath: string): Promise<void> {
+  try {
+    await access(repoPath);
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      throw new Error(`Repository path does not exist: ${path.resolve(repoPath)}`);
+    }
+
+    throw error;
+  }
+}
+
+function normalizeAnalyseError(error: unknown): Error {
+  if (isSpawnGitEnoent(error)) {
+    return new Error("Git executable was not found on PATH.");
+  }
+
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function describeAnalyseError(error: unknown): string {
+  if (isSpawnGitEnoent(error)) {
+    return "git executable not found";
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function isSpawnGitEnoent(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("spawn git ENOENT");
+}
+
+function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }

@@ -33,6 +33,10 @@ export async function getCommitHistory(
     query.filePath = options.filePath;
   }
 
+  if (options.allRefs !== undefined) {
+    query.allRefs = options.allRefs;
+  }
+
   const snapshots = await loadCommitHistory(repoPath, query);
 
   return snapshots.map(toCommit);
@@ -131,6 +135,11 @@ function toCommit(entry: GitCommitSnapshotEntry): Commit {
     filesChanged: [...entry.filesChanged],
     insertions: entry.insertions,
     deletions: entry.deletions,
+    fileStats: entry.fileStats.map((fileStat) => ({
+      filePath: fileStat.filePath,
+      insertions: fileStat.additions,
+      deletions: fileStat.deletions,
+    })),
     isMerge: entry.isMerge,
   };
 }
