@@ -1,0 +1,10 @@
+node_modules
+dist
+.turbo
+.strata
+coverage
+playwright-report
+test-results
+tmp
+*.log
+

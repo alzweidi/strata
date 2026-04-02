@@ -1,0 +1,27 @@
+{
+  "name": "@strata/core",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --out-dir dist",
+    "dev": "tsup src/index.ts --watch --format esm --dts --out-dir dist",
+    "test": "vitest run --passWithNoTests",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.3",
+    "simple-git": "^3.28.0",
+    "web-tree-sitter": "^0.25.10"
+  }
+}

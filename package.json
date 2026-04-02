@@ -1,0 +1,38 @@
+{
+  "name": "strata",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.11.1",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test && vitest run --config tests/vitest.config.ts && playwright test --config tests/playwright.config.ts",
+    "test:integration": "vitest run --config tests/vitest.config.ts",
+    "test:e2e": "playwright test --config tests/playwright.config.ts",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck && tsc -p tests/tsconfig.json --noEmit",
+    "clean": "turbo clean",
+    "strata": "node packages/cli/dist/index.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@types/d3": "^7.4.3",
+    "@types/node": "^24.5.2",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.3",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "tsup": "^8.5.0",
+    "turbo": "^2.5.6",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7",
+    "vitest": "^3.2.4"
+  }
+}
